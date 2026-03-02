@@ -1,24 +1,22 @@
 class LayerNorm(nn.Module):
-    def __init__(self, normalized_shape, eps=1e-6, data_format="channels_last"):
+    def __init__(self, dim, eps=1e-6, fmt="channels_last"):
         super().__init__()
-        self.weight = nn.Parameter(torch.ones(normalized_shape))
-        self.bias = nn.Parameter(torch.zeros(normalized_shape))
+        self.g = nn.Parameter(torch.ones(dim))
+        self.b = nn.Parameter(torch.zeros(dim))
         self.eps = eps
-        self.data_format = data_format
-        if self.data_format not in ["channels_last", "channels_first"]:
+        self.fmt = fmt
+        if fmt not in ("channels_last", "channels_first"):
             raise NotImplementedError
-        self.normalized_shape = (normalized_shape, )
+        self._shape = (dim,)
 
     def forward(self, x):
-        if self.data_format == "channels_last":
-            return F.layer_norm(x, self.normalized_shape, self.weight, self.bias, self.eps)
-        elif self.data_format == "channels_first":
-            u = x.mean(1, keepdim=True)
-            s = (x - u).pow(2).mean(1, keepdim=True)
-            x = (x - u) / torch.sqrt(s + self.eps)
-            x = self.weight[:, None, None, None] * x + self.bias[:, None, None, None]
+        if self.fmt == "channels_last":
+            return F.layer_norm(x, self._shape, self.g, self.b, self.eps)
 
-            return x
+        mu = x.mean(1, keepdim=True)
+        var = (x - mu).pow(2).mean(1, keepdim=True)
+        y = (x - mu) / torch.sqrt(var + self.eps)
+        return y * self.g[:, None, None, None] + self.b[:, None, None, None]
 
 
 class LSKA3D(nn.Module):
@@ -124,4 +122,5 @@ class MlpChannel(nn.Module):
         x = self.act(x)
         x = self.fc2(x)
         return x
+
 
